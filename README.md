@@ -1,6 +1,6 @@
 # NixOS XFCE with Impermanence
 
-An interactive installer for the official NixOS 26.05 live ISO, with XFCE,
+A NixOS 26.05 workstation configuration and interactive live-ISO installer, with XFCE,
 LightDM, Zen Browser (beta), Codex Desktop Linux, Steam, NetworkManager,
 PipeWire, Bluetooth, printing, zram, and the
 CachyOS Zen 4 kernel. Requires an AMD Zen 4-compatible x86_64 CPU and UEFI;
@@ -9,6 +9,114 @@ The laptop target is a Ryzen 5 8645HS with Radeon 760M and RTX 4050 Laptop GPU.
 Disable Secure Boot unless you have separately configured signed boot support.
 Internet access is required. Use a disk with at least 20 GiB; 40 GiB or more is
 recommended. The disk is **unencrypted**.
+
+## Layout and ownership
+
+The stable output is `nixosConfigurations.nixos`, regardless of hostname.
+There is no host-discovery framework: `configuration.nix` explicitly imports the
+installed-system modules, and `flake.nix` wires external modules and inputs.
+
+| Location | Owns |
+| --- | --- |
+| `flake.nix`, `flake.lock` | Input pins, overlay, external modules, checks, `settings` argument |
+| `configuration.nix` | Installed-system module list |
+| `hosts/nixos/default.nix` | Zen 4 kernel, UEFI loader, laptop NVIDIA/PRIME/Dynamic Boost |
+| `hosts/nixos/hardware-configuration.nix` | Generated devices, UUIDs, initrd modules, CPU microcode |
+| `hosts/nixos/settings.nix` | Hostname, username, timezone, keyboard, detected PCI IDs; no secrets |
+| `modules/system.nix` | Network, locale, Nix/cache/nh, base tools, memory and diagnostic storage |
+| `modules/users.nix` | Accounts, runtime password-file paths, Home Manager integration |
+| `modules/persistence.nix` | Ephemeral root, early mounts, persistent state and mount policy |
+| `modules/gaming.nix` | Steam, NTSync, ProtonUp-Qt, scx, power wrapper and existing THP rule |
+| `modules/desktop/xfce.nix` | XFCE/LightDM, audio, desktop services, fonts and stable launchers |
+| `modules/desktop/apps.nix` | Zen policies, Codex Desktop and Zed |
+| `home/xfce.nix` | User desktop, panel layout, shortcuts, MIME associations and terminal |
+| `home/style.nix`, `modules/desktop/style.nix` | Palette, final panel sizes, wallpaper helper and its system integration |
+| `installer/install.sh` | Interactive ISO-only destructive workflow |
+| `installer/prepare.sh`, `installer/manifest` | Shared safe staging/preflight and complete source-tree manifest |
+| `tests/` | Shell/staging tests, NixOS invariants, evaluated snapshot expression |
+
+Keep machine changes in `hosts/nixos`. Reuse the modules with another host by
+explicitly composing them and passing its `settings` attribute set. The existing
+host selects the Zen 4 kernel; reusing desktop modules alone does not select it.
+`home/*.nix` are small parameterized configuration fragments; they are wired by
+the desktop modules and are not a standalone Home Manager flake.
+
+New modules inside `hosts`, `modules`, or `home` are automatically staged by the
+installer. If you introduce a new top-level source directory, add it to
+`installer/manifest`. Missing required files/imports fail in staging or preflight.
+The root `install.sh` is only a compatibility wrapper. Never use it for checks.
+
+## Safe maintenance checks
+
+From `/etc/nixos`, without activating anything:
+
+```bash
+nix flake check --no-write-lock-file path:/etc/nixos
+bash tests/installer.sh --evaluate
+nh os build
+# Equivalent full build without an output symlink:
+nix build --no-link --no-write-lock-file path:/etc/nixos#nixosConfigurations.nixos.config.system.build.toplevel
+```
+
+The flake check runs ShellCheck, Bash syntax checks, staging tests and NixOS
+assertions. The separate `--evaluate` suite invokes only `installer/prepare.sh`:
+it tests the real preflight with valid configuration, an unknown option, a failed
+assertion, an inconsistent lock, and a fresh username without the laptop GPUs. It uses temporary files
+and Nix evaluation; it never runs the destructive installer or disk commands.
+It needs Bash, Nix and ripgrep (`nix shell` from the locked nixpkgs can supply rg).
+
+For comparing future refactors, save a copy outside this repository before
+editing, then evaluate `tests/snapshot.nix` against both absolute paths:
+
+```bash
+nix eval --impure --json --expr 'import ./tests/snapshot.nix { source = "/etc/nixos"; }' > /tmp/nixos-settings.json
+```
+
+The snapshot captures packages, mounts, passwords' *paths*, users, kernel/driver,
+scx, Home Manager activation, generated units, `/etc` sources and activation
+scripts. Review differences rather than blindly accepting new snapshots. Sorted
+package/mount lists ease comparison; also inspect generated output when order
+could matter. Store paths can change when equivalent module lists are reordered.
+
+`nh os build`, `nh os switch` and `nh os boot` continue to use `path:/etc/nixos`.
+Only activate when ready, with `nh os switch` or the explicit rebuild command
+below. `path:` includes new files even before Git tracks them; add all new module
+files when eventually committing. Never put credentials anywhere in this source
+tree: path flakes copy the tree into the world-readable Nix store, regardless of
+`.gitignore`. Password hashes remain at `/persist/passwords/{root,user}`, a
+root-only directory outside the tree. Keep other credentials outside the tree
+and reference runtime paths; do not use `builtins.readFile` on secret material.
+
+## Persistence and first-login review
+
+`/home`, `/nix` and `/persist` are Btrfs mounts available in the initrd. The pinned
+Impermanence module binds early state before initrd activation and normal
+persistent directories before `local-fs.target`. The early `/persist` mount also
+makes password files available to user activation; no additional ad-hoc mount
+services are needed. The generated hardware UUIDs and all persistence entries
+were retained. `/etc/machine-id`, NetworkManager, Bluetooth, AccountsService,
+LightDM, CUPS, logs, NixOS/systemd state and NVIDIA suspend storage are covered.
+All browser, editor, Steam and keyring state under `/home` persists automatically.
+
+The pinned Home Manager module uses `RequiresMountsFor=/home/<user>` and runs
+before login sessions. Its xfconf activation starts a temporary D-Bus session
+when no desktop session exists, so fresh users receive settings before their
+first XFCE login. The existing autostarts reapply the dark theme and wait for
+monitor-specific wallpaper keys. Those scripts and the Home Manager activation
+are unchanged by the refactor.
+
+A missing password file on a fresh machine can leave login unusable; the live
+installer must finish password creation before reboot. A password change does
+not automatically unlock a pre-existing GNOME login keyring with its old
+password. NetworkManager secrets are under the persisted root-only connection
+directory. There is currently no enabled SSH server, container service or
+system database needing additional persistence. Recheck coverage before enabling
+one. Volatile caches and `/tmp` remain intentionally ephemeral.
+
+A build and evaluation do not prove a fresh graphical login, suspend/resume or
+boot persistence. Those require a disposable VM/target or a later user-approved
+activation and reboot. No disk installation, activation or reboot was performed
+as part of this refactor.
 
 ## Install from the live ISO
 
@@ -45,15 +153,15 @@ The installer automatically fetches OpenSSL from the locked Nixpkgs if the
 live ISO does not provide it, before making any disk changes. No manual
 `nix-shell` is needed.
 
-The installer generates `hardware-configuration.nix` for your machine and a
-`flake.lock` pinning NixOS, Impermanence, CachyOS, Codex Desktop Linux, and Zen
-Browser inputs. Both are stored with your configuration
+The installer generates `hosts/nixos/hardware-configuration.nix` for your machine
+and preserves the supplied `flake.lock`, including the Home Manager and application
+pins. A missing or inconsistent lock fails before erasure. These are stored with your configuration
 in `/persist/etc/nixos`, mounted at `/etc/nixos` on the installed system.
 The `nixos` flake output name stays the same regardless of hostname.
 
 ## Desktop layout and shortcuts
 
-`desktop.nix` uses Home Manager to apply the desktop settings for the username
+`home/xfce.nix` uses Home Manager to apply the desktop settings for the username
 selected by the installer. It creates one bottom panel with Whisker menu,
 five numbered workspaces, Zen/Codex/Alacritty/Thunar launchers, open windows,
 the system tray, volume control, and a 24-hour clock. Wi-Fi, Bluetooth and
@@ -67,7 +175,14 @@ The desktop uses Adwaita Dark, elementary XFCE icons, readable interface fonts,
 and Iosevka in the terminal and clock. Desktop icons are hidden; maximized
 windows hide their title bars. XFCE's screensaver handles locking.
 
-`style.nix` adds a charcoal (`#202624`) and sage (`#a7bf9e`) palette, a slim
+Display power management explicitly switches the panel off after five minutes
+of inactivity on both AC and battery, without an intermediate standby stage.
+The existing screensaver and locking remain enabled. These minute-based timers
+live in `home/xfce.nix`. After activation, `xset q` should report DPMS enabled,
+`Standby: 0`, `Suspend: 0`, and `Off: 300` in a normal uninhibited session.
+Applications that inhibit display power saving can delay this timeout.
+
+`home/style.nix` adds a charcoal (`#202624`) and sage (`#a7bf9e`) palette, a slim
 opaque panel, matching Rofi and Alacritty colors, and a generated 4K hills
 wallpaper. GTK selection accents use sage. Zen Browser receives dark theme
 and selection-color defaults; existing profile overrides and workspace themes
@@ -76,7 +191,7 @@ while alerts stay enabled with a five-second default timeout.
 
 The wallpaper is applied to detected monitor settings on each XFCE login.
 After connecting a new display, run `apply-quiet-wallpaper` to apply it there.
-Change the palette and wallpaper in `style.nix`, then rebuild and log in again.
+Change the palette and wallpaper in `home/style.nix`, then rebuild and log in again.
 GTK applications may need restarting to load the updated CSS. Individual
 applications can use their own theme and may not follow all system colors.
 
@@ -99,16 +214,17 @@ applications can use their own theme and may not follow all system colors.
 | Volume / mute keys | Adjust output volume or mute |
 
 Super is the Windows/logo key. Microphone mute is supported when the keyboard
-has that key. Save changes you want to keep in `desktop.nix`: GUI changes to
+has that key. Save changes you want to keep in `home/xfce.nix`: GUI changes to
 declared settings can be overwritten on the next rebuild. Other settings and
 user files remain under persistent `/home`.
 
-For an existing installation, copy the updated configuration files (including
-`desktop.nix`, `style.nix`, and `flake.nix`) into `/etc/nixos`, preserving the machine's
-`settings.nix` and generated `hardware-configuration.nix`. Rebuild normally,
-then log out and back in to reload panel plugins. On a new install these settings
-are applied automatically. Home Manager backs up conflicting managed files
-with the suffix `.before-xfce-setup` rather than silently replacing them.
+For an existing installation, keep the entire module tree together, preserving
+`hosts/nixos/settings.nix` and `hosts/nixos/hardware-configuration.nix`. Rebuild
+normally, then log out and back in to reload panel plugins. Home Manager backs
+up conflicting managed files with `.before-xfce-setup`; an existing backup of
+the same name can stop activation. Inspect and move that backup before retrying,
+rather than deleting it blindly. Check `systemctl status home-manager-mehti`
+(substitute your username) if desktop setup fails.
 
 ## What survives reboot
 
@@ -123,12 +239,12 @@ with the suffix `.before-xfce-setup` rather than silently replacing them.
 
 The remaining disk space is one Btrfs filesystem with `home`, `nix`, and
 `persist` subvolumes. All three declare `compress=zstd` and `noatime` in
-`impermanence.nix` so these options survive reboot. Compression applies to new
+`modules/persistence.nix` so these options survive reboot. Compression applies to new
 writes; existing files are not automatically recompressed. Root lives in memory, so no destructive boot-time rollback
 script is needed. Store large temporary downloads/build files under your home
 directory if the root tmpfs runs short of space. Zram is enabled, not hibernation.
 
-`impermanence.nix` declares persistent system paths, including configuration,
+`modules/persistence.nix` declares persistent system paths, including configuration,
 machine ID, Wi-Fi connections, Bluetooth pairings, printer state, and logs.
 Add application/service data paths there **before** rebooting if you need them
 to survive. Persistence is not a backup; back up `/home`, `/persist`, and your
@@ -183,7 +299,7 @@ systemctl list-timers systemd-tmpfiles-clean.timer
 
 The installer detects the laptop's Radeon 760M (`1002:1900`) and RTX 4050
 (`10de:28a1`) directly from Linux PCI sysfs and saves their decimal PRIME bus
-IDs in `settings.nix`. Keep firmware graphics mode set to hybrid/switchable.
+IDs in `hosts/nixos/settings.nix`. Keep firmware graphics mode set to hybrid/switchable.
 The AMD GPU runs XFCE; the NVIDIA GPU is available on demand through PRIME
 offload. NVIDIA's open kernel module, proprietary userspace, 32-bit graphics,
 runtime power management and suspend support are enabled when the RTX is found.
@@ -202,12 +318,13 @@ display routing and suspend/resume need testing on the laptop.
 
 In a VM without these GPUs, the installer leaves NVIDIA disabled. Do not reuse
 that VM's empty GPU settings for the real laptop. On an existing installation,
-preserve the detected PCI IDs in `settings.nix` when updating other files.
+preserve the detected PCI IDs in `hosts/nixos/settings.nix` when updating other files.
 
 `services.scx` starts **scx_cake** automatically at boot, using the Rust SCX
 scheduler package from the locked NixOS release. The current release package
 is the SCX 1.1.2 suite and includes `scx_cake`; the scheduler's own version
-can differ. No verbose TUI or additional tuning flags are enabled in the service.
+can differ. The service selects the `esports` profile with `--profile esports`; no verbose
+TUI or individual tuning overrides are enabled.
 This changes CPU scheduling, not the disk I/O scheduler or network queueing.
 
 After booting the CachyOS kernel, verify:
@@ -232,7 +349,7 @@ sudo systemctl start scx.service
 ```
 
 For a permanent fallback, set `services.scx.enable = false` in
-`configuration.nix` and rebuild. If troubleshooting at boot, add
+`modules/gaming.nix` and rebuild. If troubleshooting at boot, add
 `systemd.mask=scx.service` to the kernel command line for that boot.
 The NixOS service limits repeated startup failures; sched_ext can detach a
 misbehaving scheduler and fall back to the built-in scheduler. Hardware/runtime
@@ -273,7 +390,7 @@ If a cached build is unavailable, Nix may compile the kernel locally, which
 requires substantial time and temporary disk space. After reboot, `uname -r`
 shows the running kernel; the exact kernel version is determined by `flake.lock`.
 
-Edit `/etc/nixos/configuration.nix`, `settings.nix`, or `impermanence.nix`, then:
+Edit the owning module listed below, then:
 
 ```bash
 sudo nixos-rebuild switch --flake path:/etc/nixos#nixos
@@ -322,8 +439,9 @@ instead. After success, unmount and reboot as above.
 ## Validation and references
 
 This configuration was originally written on Windows and is now installed on
-this NixOS laptop. The Linux review on 2026-09-20 checked Nix flake evaluation,
-Bash syntax, file line endings, active persistence mounts, and service health.
+this NixOS laptop. The architecture review on 2026-09-20 checked the pinned module implementations,
+evaluated before/after settings, shell checks, safe installer preparation, active
+persistence mounts, service health, and full system builds.
 No system or user services were failed at the time of the review.
 
 The installer preflight was tested in an isolated temporary directory with
@@ -363,9 +481,25 @@ consumption may increase while it is active.
 CachyOS-inspired THP tuning sets `khugepaged/max_ptes_none` to `409` rather
 than `511` to split sparsely used huge pages more readily. Treat this as a trial:
 compare your usual games and memory-heavy workloads. To undo it, remove the
-THP tmpfiles rule in `configuration.nix`, rebuild, and reboot.
+THP tmpfiles rule in `modules/gaming.nix`, rebuild, and reboot.
 
 ## ProtonUp-Qt
 
 ProtonUp-Qt is installed to manage Steam compatibility tools through its GUI.
 Open it from the application menu after rebuilding.
+
+### Refactor verification (2026-09-20)
+
+The pre-refactor working tree (including the existing esports and Dynamic Boost
+edits) was saved to `/home/mehti/nixos-review-baseline`. `flake.lock` and generated
+hardware remained byte-identical. Evaluated package paths, Home Manager
+activation, user identity, kernel/driver, scx, desktop settings and mount policy
+matched after restoring the original font and mount-option order. The rebuilt
+system profile had 17,555 entries with identical file contents and symlink targets.
+Remaining generated-unit and D-Bus differences reference the equivalent profile
+at a new store path; D-Bus configuration is otherwise identical.
+
+Both baseline and refactored systems built successfully. Flake evaluation,
+ShellCheck, Bash syntax, installer staging and positive/negative preflight tests
+passed. The reviewed runtime had no failed system or user services. This does
+not replace the fresh-login, reboot and suspend tests described above.

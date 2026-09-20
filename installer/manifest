@@ -1,0 +1,10 @@
+flake.nix
+flake.lock
+configuration.nix
+hosts
+modules
+home
+installer
+tests
+install.sh
+README.md

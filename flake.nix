@@ -13,30 +13,54 @@
   inputs.home-manager.url = "github:nix-community/home-manager/release-26.05";
   inputs.home-manager.inputs.nixpkgs.follows = "nixpkgs";
 
-  outputs = { nixpkgs, impermanence, nix-cachyos-kernel, codex-desktop-linux, zen-browser, home-manager, ... }: {
-    nixosConfigurations.nixos = nixpkgs.lib.nixosSystem {
+  outputs =
+    inputs@{
+      nixpkgs,
+      impermanence,
+      nix-cachyos-kernel,
+      codex-desktop-linux,
+      home-manager,
+      ...
+    }:
+    let
       system = "x86_64-linux";
-      modules = [
-        { nixpkgs.overlays = [ nix-cachyos-kernel.overlays.pinned ]; }
-        ({ pkgs, ... }: {
-          environment.systemPackages = [
-            (zen-browser.packages.${pkgs.stdenv.hostPlatform.system}.beta.override {
-              # Default browser chrome to dark with sage selection accents.
-              extraPolicies.Preferences = {
-                "ui.systemUsesDarkTheme" = { Value = 1; Status = "default"; };
-                "browser.theme.toolbar-theme" = { Value = 0; Status = "default"; };
-                "browser.theme.content-theme" = { Value = 0; Status = "default"; };
-                "ui.highlight" = { Value = "#a7bf9e"; Status = "default"; };
-                "ui.highlighttext" = { Value = "#202624"; Status = "default"; };
-              };
-            })
-          ];
-        })
-        codex-desktop-linux.nixosModules.default
-        home-manager.nixosModules.home-manager
-        impermanence.nixosModules.impermanence
-        ./configuration.nix
-      ];
+      pkgs = import nixpkgs { inherit system; };
+    in
+    {
+      checks.${system}.installer =
+        pkgs.runCommand "installer-checks"
+          {
+            nativeBuildInputs = [
+              pkgs.bash
+              pkgs.shellcheck
+              pkgs.ripgrep
+            ];
+          }
+          ''
+            cp -R ${./.} source
+            chmod -R u+w source
+            cd source
+            shellcheck -x install.sh installer/*.sh tests/*.sh
+            for script in install.sh installer/*.sh tests/*.sh; do bash -n "$script"; done
+            bash tests/installer.sh
+            touch "$out"
+          '';
+      nixosConfigurations.nixos = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        specialArgs = {
+          inherit inputs;
+          settings = import ./hosts/nixos/settings.nix;
+        };
+        modules = [
+          { nixpkgs.overlays = [ nix-cachyos-kernel.overlays.pinned ]; }
+          codex-desktop-linux.nixosModules.default
+          home-manager.nixosModules.home-manager
+          impermanence.nixosModules.impermanence
+          ({ config, lib, ... }: {
+            assertions = import ./tests/invariants.nix { inherit config lib; };
+          })
+          ./configuration.nix
+        ];
+      };
     };
-  };
 }

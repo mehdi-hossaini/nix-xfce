@@ -1,6 +1,5 @@
-{ pkgs, lib, ... }:
+{ pkgs, ... }:
 let
-  settings = import ./settings.nix;
   palette = {
     background = "#202624";
     surface = "#29312d";
@@ -26,7 +25,13 @@ let
   '';
   applyWallpaper = pkgs.writeShellApplication {
     name = "apply-quiet-wallpaper";
-    runtimeInputs = [ pkgs.xfconf pkgs.xrandr pkgs.gnugrep pkgs.gnused pkgs.gawk ];
+    runtimeInputs = [
+      pkgs.xfconf
+      pkgs.xrandr
+      pkgs.gnugrep
+      pkgs.gnused
+      pkgs.gawk
+    ];
     text = ''
       # Xfdesktop creates monitor-specific keys after login. Use those keys first.
       properties=""
@@ -66,9 +71,10 @@ let
     .xfce4-panel button:checked { background: ${palette.surface}; color: ${palette.accent}; border-bottom: 2px solid ${palette.accent}; }
     #whiskermenu-window { background: ${palette.background}; color: ${palette.foreground}; }
   '';
-in {
-  environment.systemPackages = [ applyWallpaper ];
-  home-manager.users.${settings.username} = {
+in
+{
+  command = applyWallpaper;
+  home = {
     # Explicit managed CSS, without modifying the upstream GTK theme package.
     xdg.configFile."gtk-3.0/gtk.css".text = gtkCss;
     xdg.configFile."gtk-4.0/gtk.css".text = gtkCss;
@@ -93,33 +99,104 @@ in {
         drun-display-format = "{name}";
         icon-theme = "elementary-xfce-dark";
       };
-      theme = let literal = value: { _type = "literal"; inherit value; }; in {
-        "*" = {
-          background-color = literal palette.background;
-          text-color = literal palette.foreground;
-          border-color = literal palette.border;
+      theme =
+        let
+          literal = value: {
+            _type = "literal";
+            inherit value;
+          };
+        in
+        {
+          "*" = {
+            background-color = literal palette.background;
+            text-color = literal palette.foreground;
+            border-color = literal palette.border;
+          };
+          window = {
+            width = literal "540px";
+            border = literal "1px";
+            border-radius = literal "10px";
+            padding = literal "18px";
+          };
+          mainbox = {
+            spacing = literal "12px";
+            children = map literal [
+              "inputbar"
+              "listview"
+            ];
+          };
+          inputbar = {
+            spacing = literal "10px";
+            padding = literal "8px";
+            children = map literal [
+              "prompt"
+              "entry"
+            ];
+          };
+          prompt.text-color = literal palette.accent;
+          entry = {
+            placeholder = "Search applications";
+            placeholder-color = literal palette.muted;
+          };
+          listview = {
+            lines = 7;
+            columns = 1;
+            fixed-height = false;
+            scrollbar = false;
+            spacing = literal "4px";
+          };
+          element = {
+            padding = literal "10px";
+            border-radius = literal "5px";
+            spacing = literal "10px";
+          };
+          "element selected.normal" = {
+            background-color = literal palette.accent;
+            text-color = literal palette.background;
+          };
+          "element-icon, element-text" = {
+            background-color = literal "inherit";
+            text-color = literal "inherit";
+          };
+          element-icon.size = literal "22px";
         };
-        window = { width = literal "540px"; border = literal "1px"; border-radius = literal "10px"; padding = literal "18px"; };
-        mainbox = { spacing = literal "12px"; children = map literal [ "inputbar" "listview" ]; };
-        inputbar = { spacing = literal "10px"; padding = literal "8px"; children = map literal [ "prompt" "entry" ]; };
-        prompt.text-color = literal palette.accent;
-        entry = { placeholder = "Search applications"; placeholder-color = literal palette.muted; };
-        listview = { lines = 7; columns = 1; fixed-height = false; scrollbar = false; spacing = literal "4px"; };
-        element = { padding = literal "10px"; border-radius = literal "5px"; spacing = literal "10px"; };
-        "element selected.normal" = { background-color = literal palette.accent; text-color = literal palette.background; };
-        "element-icon, element-text" = { background-color = literal "inherit"; text-color = literal "inherit"; };
-        element-icon.size = literal "22px";
-      };
     };
     programs.alacritty.settings = {
       window.opacity = 1.0;
       bell.duration = 0;
       colors = {
-        primary = { background = lib.mkForce palette.background; foreground = lib.mkForce palette.foreground; };
-        cursor = { cursor = palette.accent; text = palette.background; };
-        selection = { background = palette.accent; text = palette.background; };
-        normal = { black = "#29312d"; red = "#cb9290"; green = "#a7bf9e"; yellow = "#c9bb91"; blue = "#92afb9"; magenta = "#b5a0bd"; cyan = "#91b9ab"; white = "#d1d9ce"; };
-        bright = { black = "#708075"; red = "#dfa8a2"; green = "#bfd4b7"; yellow = "#ded0a6"; blue = "#aac7d0"; magenta = "#cab6d1"; cyan = "#aed0c1"; white = "#eef1e9"; };
+        primary = {
+          background = palette.background;
+          foreground = palette.foreground;
+        };
+        cursor = {
+          cursor = palette.accent;
+          text = palette.background;
+        };
+        selection = {
+          background = palette.accent;
+          text = palette.background;
+        };
+        normal = {
+          black = "#29312d";
+          red = "#cb9290";
+          green = "#a7bf9e";
+          yellow = "#c9bb91";
+          blue = "#92afb9";
+          magenta = "#b5a0bd";
+          cyan = "#91b9ab";
+          white = "#d1d9ce";
+        };
+        bright = {
+          black = "#708075";
+          red = "#dfa8a2";
+          green = "#bfd4b7";
+          yellow = "#ded0a6";
+          blue = "#aac7d0";
+          magenta = "#cab6d1";
+          cyan = "#aed0c1";
+          white = "#eef1e9";
+        };
       };
     };
     xfconf.settings = {
@@ -138,10 +215,22 @@ in {
       };
       xfce4-desktop."backdrop/single-workspace-mode" = true;
       xfce4-panel = {
-        "panels/panel-1/size" = lib.mkForce { type = "uint"; value = 32; };
-        "panels/panel-1/icon-size" = lib.mkForce { type = "uint"; value = 22; };
-        "panels/panel-1/enter-opacity" = { type = "uint"; value = 100; };
-        "panels/panel-1/leave-opacity" = { type = "uint"; value = 100; };
+        "panels/panel-1/size" = {
+          type = "uint";
+          value = 32;
+        };
+        "panels/panel-1/icon-size" = {
+          type = "uint";
+          value = 22;
+        };
+        "panels/panel-1/enter-opacity" = {
+          type = "uint";
+          value = 100;
+        };
+        "panels/panel-1/leave-opacity" = {
+          type = "uint";
+          value = 100;
+        };
       };
       xfce4-notifyd = {
         "initial-opacity" = 1.0;
