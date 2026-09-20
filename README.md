@@ -1,0 +1,371 @@
+# NixOS XFCE with Impermanence
+
+An interactive installer for the official NixOS 26.05 live ISO, with XFCE,
+LightDM, Zen Browser (beta), Codex Desktop Linux, Steam, NetworkManager,
+PipeWire, Bluetooth, printing, zram, and the
+CachyOS Zen 4 kernel. Requires an AMD Zen 4-compatible x86_64 CPU and UEFI;
+use the x86_64 ISO. This is not a generic Intel, older AMD, or ARM build.
+The laptop target is a Ryzen 5 8645HS with Radeon 760M and RTX 4050 Laptop GPU.
+Disable Secure Boot unless you have separately configured signed boot support.
+Internet access is required. Use a disk with at least 20 GiB; 40 GiB or more is
+recommended. The disk is **unencrypted**.
+
+## Install from the live ISO
+
+1. Copy this entire folder to a second USB drive, or download it from your own
+   repository after booting the live ISO. No hosted download URL is provided.
+2. Boot the NixOS ISO in **UEFI mode**. Connect using the desktop network menu
+   (or `sudo nmtui` from a terminal).
+3. Copy the folder from your second USB into the live user's home directory,
+   then open a terminal in the copied folder. For example, if named `nixos`:
+
+   ```bash
+   cd ~/nixos
+   sudo bash install.sh
+   ```
+
+4. Enter the hostname, administrator username, timezone and keyboard layout.
+   Defaults are `nixos`, `user`, `Europe/Stockholm`, and `us`. For a Swedish
+   keyboard enter `se`. Passwords are entered with the live ISO's current
+   keyboard layout; set that in the live desktop first if necessary.
+5. Select a whole disk by its path, checking the displayed size and model.
+   **All partitions and data on that disk will be erased.** Nothing is erased
+   until you type the exact `ERASE /dev/...` phrase. Mounted disks, active swap,
+   and active device mappings are rejected, including the mounted live USB.
+6. Set root and user passwords when prompted. Wait for the completion message.
+7. Run `sudo umount -R /mnt` then `sudo reboot`, and remove the live USB.
+
+Before any disk changes, the installer evaluates the system configuration with
+placeholder mount devices. Syntax errors, unknown options, and failed system
+assertions stop installation before the erase prompt. This does not test a full
+build or boot. The placeholder hardware file is discarded; the real one is
+generated from the target mounts.
+
+The installer automatically fetches OpenSSL from the locked Nixpkgs if the
+live ISO does not provide it, before making any disk changes. No manual
+`nix-shell` is needed.
+
+The installer generates `hardware-configuration.nix` for your machine and a
+`flake.lock` pinning NixOS, Impermanence, CachyOS, Codex Desktop Linux, and Zen
+Browser inputs. Both are stored with your configuration
+in `/persist/etc/nixos`, mounted at `/etc/nixos` on the installed system.
+The `nixos` flake output name stays the same regardless of hostname.
+
+## Desktop layout and shortcuts
+
+`desktop.nix` uses Home Manager to apply the desktop settings for the username
+selected by the installer. It creates one bottom panel with Whisker menu,
+five numbered workspaces, Zen/Codex/Alacritty/Thunar launchers, open windows,
+the system tray, volume control, and a 24-hour clock. Wi-Fi, Bluetooth and
+battery controls stay available. LightDM remains the login screen.
+
+Zen is configured as both the XDG default browser for web links and HTML files
+and XFCE’s preferred web browser. Dark GTK defaults are written by Home Manager;
+the Adwaita-dark XFCE theme is also applied at every login.
+
+The desktop uses Adwaita Dark, elementary XFCE icons, readable interface fonts,
+and Iosevka in the terminal and clock. Desktop icons are hidden; maximized
+windows hide their title bars. XFCE's screensaver handles locking.
+
+`style.nix` adds a charcoal (`#202624`) and sage (`#a7bf9e`) palette, a slim
+opaque panel, matching Rofi and Alacritty colors, and a generated 4K hills
+wallpaper. GTK selection accents use sage. Zen Browser receives dark theme
+and selection-color defaults; existing profile overrides and workspace themes
+can take precedence. Notification sounds and transition effects are disabled,
+while alerts stay enabled with a five-second default timeout.
+
+The wallpaper is applied to detected monitor settings on each XFCE login.
+After connecting a new display, run `apply-quiet-wallpaper` to apply it there.
+Change the palette and wallpaper in `style.nix`, then rebuild and log in again.
+GTK applications may need restarting to load the updated CSS. Individual
+applications can use their own theme and may not follow all system colors.
+
+| Shortcut | Action |
+| --- | --- |
+| Super + Enter | Alacritty terminal |
+| Super + D | Rofi application launcher |
+| Super + E | Thunar files |
+| Super + B | Zen Browser |
+| Super + C | Codex Desktop |
+| Super + Q | Close window |
+| Super + F | Toggle maximization |
+| Super + Left / Right | Tile window to that side |
+| Super + 1–5 | Switch workspace |
+| Super + Shift + 1–5 | Move window to workspace |
+| Super + S | Region screenshot to clipboard |
+| Print Screen | Screenshot dialog |
+| Super + L | Lock screen |
+| Alt + Tab | Cycle windows |
+| Volume / mute keys | Adjust output volume or mute |
+
+Super is the Windows/logo key. Microphone mute is supported when the keyboard
+has that key. Save changes you want to keep in `desktop.nix`: GUI changes to
+declared settings can be overwritten on the next rebuild. Other settings and
+user files remain under persistent `/home`.
+
+For an existing installation, copy the updated configuration files (including
+`desktop.nix`, `style.nix`, and `flake.nix`) into `/etc/nixos`, preserving the machine's
+`settings.nix` and generated `hardware-configuration.nix`. Rebuild normally,
+then log out and back in to reload panel plugins. On a new install these settings
+are applied automatically. Home Manager backs up conflicting managed files
+with the suffix `.before-xfce-setup` rather than silently replacing them.
+
+## What survives reboot
+
+| Location | Behavior |
+| --- | --- |
+| `/` | Fresh tmpfs every boot; limited to 25% of RAM |
+| `/home` | All personal files and XFCE/application settings persist |
+| `/nix` | Store, installed generations, and Nix state persist |
+| `/persist` | Selected system state and password hashes persist |
+| `/boot` | 1 GiB FAT32 EFI partition; boot entries persist |
+| `/tmp` and other unlisted root paths | Discarded on reboot |
+
+The remaining disk space is one Btrfs filesystem with `home`, `nix`, and
+`persist` subvolumes. All three declare `compress=zstd` and `noatime` in
+`impermanence.nix` so these options survive reboot. Compression applies to new
+writes; existing files are not automatically recompressed. Root lives in memory, so no destructive boot-time rollback
+script is needed. Store large temporary downloads/build files under your home
+directory if the root tmpfs runs short of space. Zram is enabled, not hibernation.
+
+`impermanence.nix` declares persistent system paths, including configuration,
+machine ID, Wi-Fi connections, Bluetooth pairings, printer state, and logs.
+Add application/service data paths there **before** rebooting if you need them
+to survive. Persistence is not a backup; back up `/home`, `/persist`, and your
+configuration independently.
+
+Passwords use root-only hash files at `/persist/passwords/root` and
+`/persist/passwords/user`, outside the Nix store. Users are declarative; to
+change the administrator's password permanently:
+
+```bash
+sudo sh -c 'umask 077; openssl passwd -6 > /persist/passwords/user.new && mv /persist/passwords/user.new /persist/passwords/user'
+sudo nixos-rebuild switch --flake path:/etc/nixos#nixos
+```
+
+Use `root` instead of `user` for the root password. A plain `passwd` change
+does not replace the persistent hash and will be reset by activation.
+
+## Change or update the system
+
+### Memory and diagnostic storage
+
+ZRAM uses Zstd, a logical capacity of 50% of RAM, and swap priority 100.
+Capacity is allocated on demand, not reserved at startup. Swappiness is 150
+and swap read-ahead (`vm.page-cluster`) is zero. Zswap is disabled to avoid
+putting another compression cache in front of ZRAM. These are starting settings
+for compressed swap, not a guaranteed speedup for every workload.
+
+Persistent journals have a `250M` budget; runtime journals have `50M`.
+Compressed crash dumps have a `512M` total storage budget, `256M` per-dump
+processing/storage limits, and a `1G` free-space target. Large crashes can
+therefore lack a full dump. These systemd budgets are cleanup limits, not hard
+filesystem quotas: active logs and dumps being processed can temporarily exceed
+them. `M` and `G` use systemd's binary units.
+
+The regular tmpfiles cleanup timer removes crash dumps eligible under a
+three-day age rule. It runs periodically, rather than exactly 72 hours after
+each crash. Dumps persist under the existing `/var/lib/systemd` mount.
+
+After installation or a rebuild and reboot, inspect the active settings with:
+
+```bash
+zramctl
+swapon --show
+sysctl vm.swappiness vm.page-cluster
+cat /sys/module/zswap/parameters/enabled
+journalctl --disk-usage
+systemd-analyze cat-config systemd/coredump.conf
+systemctl list-timers systemd-tmpfiles-clean.timer
+```
+
+### Applications and kernel
+
+The installer detects the laptop's Radeon 760M (`1002:1900`) and RTX 4050
+(`10de:28a1`) directly from Linux PCI sysfs and saves their decimal PRIME bus
+IDs in `settings.nix`. Keep firmware graphics mode set to hybrid/switchable.
+The AMD GPU runs XFCE; the NVIDIA GPU is available on demand through PRIME
+offload. NVIDIA's open kernel module, proprietary userspace, 32-bit graphics,
+runtime power management and suspend support are enabled when the RTX is found.
+The driver package comes from the selected CachyOS kernel's package set.
+VRAM suspend storage is under persistent `/var/lib/nvidia`, not root tmpfs.
+
+Run a game on the NVIDIA GPU with `nvidia-offload <game-command>`.
+Steam is installed through the NixOS Steam module. Open it from the XFCE menu
+and sign in. Use `nvidia-offload %command%` in a game's launch options to run
+it on the RTX 4050. Steam's default library and settings under `/home` persist
+across reboots. For Windows games, select a Proton compatibility tool in the
+game's Properties → Compatibility when needed.
+Check the driver after installation with `nvidia-smi`.
+An external monitor connected directly to the RTX may keep it awake; external
+display routing and suspend/resume need testing on the laptop.
+
+In a VM without these GPUs, the installer leaves NVIDIA disabled. Do not reuse
+that VM's empty GPU settings for the real laptop. On an existing installation,
+preserve the detected PCI IDs in `settings.nix` when updating other files.
+
+`services.scx` starts **scx_cake** automatically at boot, using the Rust SCX
+scheduler package from the locked NixOS release. The current release package
+is the SCX 1.1.2 suite and includes `scx_cake`; the scheduler's own version
+can differ. No verbose TUI or additional tuning flags are enabled in the service.
+This changes CPU scheduling, not the disk I/O scheduler or network queueing.
+
+After booting the CachyOS kernel, verify:
+
+```bash
+systemctl status scx.service
+cat /sys/kernel/sched_ext/state
+cat /sys/kernel/sched_ext/root/ops
+scx_cake --version
+journalctl -b -u scx.service
+```
+
+The sched_ext state should be `enabled` and the ops name should identify Cake.
+A missing `/sys/kernel/sched_ext` means the running kernel lacks sched_ext
+support; the service is then skipped. Stopping the service returns scheduling
+to the kernel's built-in scheduler:
+
+```bash
+sudo systemctl stop scx.service
+# Start again when ready:
+sudo systemctl start scx.service
+```
+
+For a permanent fallback, set `services.scx.enable = false` in
+`configuration.nix` and rebuild. If troubleshooting at boot, add
+`systemd.mask=scx.service` to the kernel command line for that boot.
+The NixOS service limits repeated startup failures; sched_ext can detach a
+misbehaving scheduler and fall back to the built-in scheduler. Hardware/runtime
+compatibility and gaming performance still need testing on the actual machine.
+
+[Upstream Cake documentation](https://github.com/sched-ext/scx/tree/main/scheds/rust/scx_cake)
+now describes a rewritten design, so the older four-tier description should
+not be assumed to describe every release. This configuration uses the packaged
+release rather than tracking upstream `main` independently.
+
+Codex Desktop is installed through the NixOS module from
+[ilysenko/codex-desktop-linux](https://github.com/ilysenko/codex-desktop-linux).
+Launch it from the **ChatGPT Community** menu entry or run `codex-desktop`.
+The configuration uses its default feature set and bundled CLI. Its signed
+Cachix cache is enabled for the live installer and installed system.
+
+Zen Browser uses the **beta** package from the
+[community Zen flake](https://github.com/0xc000022070/zen-browser-flake).
+Launch it from the XFCE applications menu. Both applications' profiles and
+Codex project state under your home directory survive reboots because all of
+`/home` persists. Keep projects there as well.
+
+To update just these applications, run:
+
+```bash
+sudo nix flake update codex-desktop-linux zen-browser --flake path:/etc/nixos
+sudo nixos-rebuild switch --flake path:/etc/nixos#nixos
+```
+
+Application versions are controlled by `flake.lock` and system rebuilds.
+
+The kernel is `pkgs.cachyosKernels.linuxPackages-cachyos-latest-zen4` from
+[xddxdd/nix-cachyos-kernel](https://github.com/xddxdd/nix-cachyos-kernel).
+It uses upstream's `release` branch and `pinned` overlay, retaining the kernel
+project's own nixpkgs revision to match its binary cache. The maintainer's
+signed cache is enabled both during installation and on the installed system.
+If a cached build is unavailable, Nix may compile the kernel locally, which
+requires substantial time and temporary disk space. After reboot, `uname -r`
+shows the running kernel; the exact kernel version is determined by `flake.lock`.
+
+Edit `/etc/nixos/configuration.nix`, `settings.nix`, or `impermanence.nix`, then:
+
+```bash
+sudo nixos-rebuild switch --flake path:/etc/nixos#nixos
+```
+
+Update pinned packages within the configured release:
+
+```bash
+sudo nix flake update --flake path:/etc/nixos
+sudo nixos-rebuild switch --flake path:/etc/nixos#nixos
+```
+
+Keep `system.stateVersion` at the original installation version when upgrading.
+Earlier generations are available in the boot menu.
+
+## Resume an interrupted installation
+
+Do **not** choose erase again. If `/mnt`, `/mnt/boot`, `/mnt/nix`, `/mnt/home`,
+and `/mnt/persist` are still mounted, rerun `sudo bash install.sh --mounted`
+with the same username/settings. Existing hashes are reused and configuration
+is backed up under `/persist/etc/nixos.backup.*` before replacement.
+
+After rebooting the live ISO, identify the existing EFI and Btrfs partitions
+using `lsblk -f`. Replace `/dev/YOUR_BTRFS_PARTITION` and
+`/dev/YOUR_EFI_PARTITION` below with those **partitions**, not whole disks:
+
+```bash
+sudo mount -t tmpfs -o size=25%,mode=755 none /mnt
+sudo mkdir -p /mnt/{boot,nix,home,persist}
+sudo mount -o subvol=nix,compress=zstd /dev/YOUR_BTRFS_PARTITION /mnt/nix
+sudo mount -o subvol=home,compress=zstd /dev/YOUR_BTRFS_PARTITION /mnt/home
+sudo mount -o subvol=persist,compress=zstd /dev/YOUR_BTRFS_PARTITION /mnt/persist
+sudo mount /dev/YOUR_EFI_PARTITION /mnt/boot
+sudo mkdir -p /mnt/etc/nixos
+sudo mount --bind /mnt/persist/etc/nixos /mnt/etc/nixos
+sudo env NIX_CONFIG='experimental-features = nix-command flakes
+extra-substituters = https://attic.xuyh0120.win/lantian https://codex-desktop-linux.cachix.org
+extra-trusted-public-keys = lantian:EeAUQ+W+6r7EtwnmYjeVwx5kOGEBpjlBfPlzGlTNvHc= codex-desktop-linux.cachix.org-1:nX/xy6AdK9hQE24A8ALGjkCKj2ObFmcnemiL5Cid4nk=' \
+  nixos-install --root /mnt --no-root-passwd --flake path:/mnt/etc/nixos#nixos
+```
+
+This resumes the saved configuration without repartitioning. If interrupted
+before configuration/password creation finished, run `install.sh --mounted`
+instead. After success, unmount and reboot as above.
+
+## Validation and references
+
+This configuration was originally written on Windows and is now installed on
+this NixOS laptop. The Linux review on 2026-09-20 checked Nix flake evaluation,
+Bash syntax, file line endings, active persistence mounts, and service health.
+No system or user services were failed at the time of the review.
+
+The installer preflight was tested in an isolated temporary directory with
+valid and deliberately invalid configurations, without running disk commands.
+The current installer has not been rerun end-to-end on a disposable disk or VM;
+suspend/resume and a reboot persistence test still need separate verification.
+After installation, create one file in your home and one in `/tmp`; reboot and
+confirm only the home file survives. Check saved Wi-Fi connections and
+`/etc/nixos` as well.
+
+Keep `install.sh` writable only by its owner (mode `0644` when invoking it with
+`sudo bash install.sh`). Do not make this root-executed script world-writable.
+
+- [Official NixOS installation manual](https://nixos.org/manual/nixos/stable/#sec-installation)
+- [Impermanence module and persistence documentation](https://github.com/nix-community/impermanence)
+
+## Gaming performance and memory tuning
+
+The system loads `ntsync` for compatible Wine/Proton versions and enables
+Power Profiles Daemon. Run `game-performance COMMAND [ARG...]` to request
+performance mode for the command's lifetime. In Steam launch options, use:
+
+```text
+game-performance %command%
+```
+
+To also request NVIDIA offloading, use:
+
+```text
+game-performance nvidia-offload %command%
+```
+
+The wrapper falls back to the current profile if performance mode is unavailable.
+The performance request is released when the command exits; heat and power
+consumption may increase while it is active.
+
+CachyOS-inspired THP tuning sets `khugepaged/max_ptes_none` to `409` rather
+than `511` to split sparsely used huge pages more readily. Treat this as a trial:
+compare your usual games and memory-heavy workloads. To undo it, remove the
+THP tmpfiles rule in `configuration.nix`, rebuild, and reboot.
+
+## ProtonUp-Qt
+
+ProtonUp-Qt is installed to manage Steam compatibility tools through its GUI.
+Open it from the application menu after rebuilding.
