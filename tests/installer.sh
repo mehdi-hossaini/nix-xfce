@@ -46,8 +46,8 @@ fi
 rg -q 'lock file.*changes|requires lock file changes' "$work/lock.log"
 cmp "$source_dir/flake.lock" "$work/staged/flake.lock"
 cp "$work/locked-flake.nix" "$work/staged/flake.nix"
-# Exercise the installer's documented VM/no-GPU branch and a fresh username.
-sed -i -e 's/username = ".*"/username = "testuser"/' \
+# Exercise the VM/no-GPU branch and a valid username requiring systemd escaping.
+sed -i -e 's/username = ".*"/username = "test-user"/' \
   -e 's/amdgpuBusId = ".*"/amdgpuBusId = ""/' \
   -e 's/nvidiaBusId = ".*"/nvidiaBusId = ""/' "$work/staged/hosts/nixos/settings.nix"
 configuration_preflight "$work/staged"

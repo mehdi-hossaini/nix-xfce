@@ -2,6 +2,7 @@
   config,
   lib,
   settings,
+  utils,
 }:
 let
   c = config;
@@ -49,6 +50,7 @@ in
     c.home-manager.users.${username}.home.homeDirectory == "/home/${username}"
   ) "Home Manager must use persistent home")
   (ensure (
-    c.systemd.services."home-manager-${username}".unitConfig.RequiresMountsFor == "/home/${username}"
+    c.systemd.services."home-manager-${utils.escapeSystemdPath username}".unitConfig.RequiresMountsFor
+    == "/home/${username}"
   ) "Home Manager must wait for home mount")
 ]

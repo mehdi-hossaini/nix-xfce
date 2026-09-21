@@ -4,7 +4,8 @@ let
   inherit (configuration) lib;
   snapshot = config: import ./snapshot.nix { configuration = config; };
   settings = configuration._module.specialArgs.settings;
-  alternateUser = "validationuser";
+  # Hyphens require escaping in Home Manager's systemd service name.
+  alternateUser = "validation-user";
   alternate = configuration.extendModules {
     specialArgs.settings = settings // {
       username = alternateUser;

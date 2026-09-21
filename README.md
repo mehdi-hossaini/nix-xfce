@@ -481,9 +481,8 @@ The installer preflight was tested in an isolated temporary directory with
 valid and deliberately invalid configurations, without running disk commands.
 The current installer has not been rerun end-to-end on a disposable disk or VM;
 suspend/resume and a reboot persistence test still need separate verification.
-An existing limitation remains for hyphenated usernames: the installer accepts
-them, but the Home Manager mount-order assertion does not escape the service
-name as Home Manager does, so preflight fails. The current `mehti` user is unaffected.
+Regression checks cover hyphenated usernames, including installer preflight;
+the mount-order assertion uses the same service-name escaping as Home Manager.
 After installation, create one file in your home and one in `/tmp`; reboot and
 confirm only the home file survives. Check saved Wi-Fi connections and
 `/etc/nixos` as well.

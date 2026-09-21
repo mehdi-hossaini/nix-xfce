@@ -69,10 +69,18 @@
               config,
               lib,
               settings,
+              utils,
               ...
             }:
             {
-              assertions = import ./tests/invariants.nix { inherit config lib settings; };
+              assertions = import ./tests/invariants.nix {
+                inherit
+                  config
+                  lib
+                  settings
+                  utils
+                  ;
+              };
             }
           )
           ./configuration.nix
