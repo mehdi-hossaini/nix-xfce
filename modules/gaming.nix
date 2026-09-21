@@ -22,64 +22,6 @@ let
       exec "$@"
     '';
   };
-  benchmarkConfig = pkgs.writeText "gaming-MangoHud.conf" ''
-    position=top-right
-    fps
-    frametime
-    frame_timing
-    fps_metrics=avg,0.01
-    gpu_stats
-    gpu_name
-    gpu_temp
-    gpu_power
-    gpu_core_clock
-    gpu_mem_clock
-    cpu_stats
-    cpu_temp
-    cpu_mhz
-    ram
-    vram
-    swap
-    throttling_status
-    log_duration=60
-    log_interval=0
-    benchmark_percentiles=AVG+1+0.1
-    toggle_logging=Shift_L+F2
-    toggle_hud=Shift_R+F12
-  '';
-  gameBenchmark = pkgs.writeShellApplication {
-    name = "game-benchmark";
-    runtimeInputs = [
-      pkgs.mangohud
-      pkgs.coreutils
-      gamePerformance
-    ];
-    text = ''
-      if [[ $# -eq 0 ]]; then
-        echo "Usage: game-benchmark COMMAND [ARG...]" >&2
-        echo "Steam: game-benchmark nvidia-offload %command%" >&2
-        exit 2
-      fi
-      log_dir="''${XDG_STATE_HOME:-$HOME/.local/state}/game-benchmarks"
-      mkdir -p "$log_dir"
-      export MANGOHUD_CONFIGFILE=${benchmarkConfig}
-      # MangoHud 0.8.3 otherwise logs the first DRM GPU, even when the
-      # renderer/header identifies NVIDIA. Select the offloaded GPU explicitly.
-      gpu_pci="''${GAME_BENCHMARK_GPU:-}"
-      if [[ -z "$gpu_pci" ]] && { [[ "''${1##*/}" == nvidia-offload ]] || [[ "''${__NV_PRIME_RENDER_OFFLOAD:-0}" == 1 ]]; }; then
-        for device in /sys/bus/pci/drivers/nvidia/????:??:??.?; do
-          if [[ -e "$device" ]]; then
-            gpu_pci="''${device##*/}"
-            break
-          fi
-        done
-      fi
-      # Colons are delimiters in MANGOHUD_CONFIG (unlike the config file).
-      gpu_pci="''${gpu_pci//:/\\:}"
-      export MANGOHUD_CONFIG="read_cfg,output_folder=$log_dir''${gpu_pci:+,pci_dev=$gpu_pci}''${MANGOHUD_CONFIG:+,$MANGOHUD_CONFIG}"
-      exec game-performance mangohud "$@"
-    '';
-  };
 in
 {
   # CPU scheduling through sched_ext; the kernel's built-in scheduler is fallback.
@@ -136,8 +78,6 @@ in
   ];
   environment.systemPackages = [
     gamePerformance
-    gameBenchmark
-    pkgs.mangohud
     pkgs.protonup-qt
   ];
 }

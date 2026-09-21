@@ -26,7 +26,7 @@ installed-system modules, and `flake.nix` wires external modules and inputs.
 | `modules/system.nix` | Network, locale, Nix/cache/nh, base tools, memory and diagnostic storage |
 | `modules/users.nix` | Accounts, runtime password-file paths, Home Manager integration |
 | `modules/persistence.nix` | Ephemeral root, early mounts, persistent state and mount policy |
-| `modules/gaming.nix` | Steam, NTSync, ProtonUp-Qt, scx, performance/benchmark wrappers, MangoHud and THP rule |
+| `modules/gaming.nix` | Steam, NTSync, ProtonUp-Qt, scx, gaming/battery power profiles and THP rule |
 | `modules/desktop/xfce.nix` | XFCE/LightDM, audio, desktop services, fonts and stable launchers |
 | `modules/desktop/apps.nix` | Zen policies, Codex Desktop and Zed |
 | `home/xfce.nix` | User desktop, panel layout, shortcuts, MIME associations and terminal |
@@ -495,10 +495,6 @@ Keep `install.sh` writable only by its owner (mode `0644` when invoking it with
 - [Impermanence module and persistence documentation](https://github.com/nix-community/impermanence)
 
 ## Gaming performance and memory tuning
-
-`game-benchmark` runs a command with
-MangoHud and the performance wrapper, saving logs under
-`${XDG_STATE_HOME:-$HOME/.local/state}/game-benchmarks`.
 
 The system loads `ntsync` for compatible Wine/Proton versions and enables
 Power Profiles Daemon. Run `game-performance COMMAND [ARG...]` to request
