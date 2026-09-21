@@ -33,6 +33,10 @@
       "/var/lib/nvidia"
       "/var/lib/systemd"
       "/var/lib/NetworkManager"
+      # Preserve the selected base power profile and daemon action preferences.
+      "/var/lib/power-profiles-daemon"
+      # Keep battery history across boots for useful health/runtime estimates.
+      "/var/lib/upower"
       {
         directory = "/etc/NetworkManager/system-connections";
         mode = "0700";

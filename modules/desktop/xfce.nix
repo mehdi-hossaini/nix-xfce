@@ -92,12 +92,28 @@ in
     desktopManager.xfce.enable = true;
   };
   services.libinput.enable = true;
+  # Deliver left/right clicks immediately instead of waiting for a chord
+  # that emulates a middle click; mice already have a physical middle button.
+  services.libinput.mouse.middleEmulation = false;
+  services.libinput.mouse.accelProfile = "flat";
   hardware.graphics.enable = true;
   hardware.graphics.enable32Bit = true;
 
   security.rtkit.enable = true;
   services.pipewire = {
     enable = true;
+    # 256 frames at the default 48 kHz gives a 5.33 ms graph cycle.
+    # Cap client-driven increases; allow smaller requests when needed.
+    extraConfig.pipewire."92-low-latency"."context.properties" = {
+      "default.clock.quantum" = 256;
+      "default.clock.max-quantum" = 256;
+    };
+    # Avoid the two-second fallback buffer for Pulse clients that do not
+    # request a size. Explicit application buffering remains unchanged.
+    extraConfig.pipewire-pulse."92-low-latency"."pulse.properties" = {
+      "pulse.default.req" = "256/48000";
+      "pulse.default.tlength" = "1024/48000";
+    };
     alsa.enable = true;
     alsa.support32Bit = pkgs.stdenv.hostPlatform.isx86_64;
     pulse.enable = true;

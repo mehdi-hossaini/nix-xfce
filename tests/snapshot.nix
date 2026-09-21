@@ -1,12 +1,15 @@
 # nix eval --impure --json --expr 'import ./tests/snapshot.nix { source = "/etc/nixos"; }'
-{ source }:
+{
+  source ? null,
+  # Tests may supply an evaluated configuration without creating another flake.
+  configuration ? (builtins.getFlake ("path:" + source)).nixosConfigurations.nixos,
+}:
 let
-  f = builtins.getFlake ("path:" + source);
-  c = f.nixosConfigurations.nixos.config;
-  lib = f.inputs.nixpkgs.lib;
-  user = builtins.head (builtins.attrNames c.home-manager.users);
+  c = configuration.config;
+  lib = configuration.lib;
+  user = configuration._module.specialArgs.settings.username;
   h = c.home-manager.users.${user};
-  paths = xs: builtins.sort builtins.lessThan (map toString xs);
+  paths = map toString;
 in
 {
   inherit (c.networking) hostName;
@@ -70,9 +73,24 @@ in
       ;
   }) c.users.users;
   home = {
-    inherit (h.home) username homeDirectory stateVersion;
+    inherit (h.home)
+      username
+      homeDirectory
+      stateVersion
+      sessionVariables
+      sessionPath
+      ;
     activation = h.home.activationPackage.drvPath;
     xfconf = h.xfconf.settings;
+    # XDG config/data files and generated user units feed into home.file.
+    # Keep source references, never read the files or password hashes here.
+    files = lib.mapAttrs (_: file: {
+      source = toString file.source;
+      inherit (file) target executable recursive;
+    }) (lib.filterAttrs (_: file: file.enable) h.home.file);
+    systemd = {
+      inherit (h.systemd.user) services sessionVariables;
+    };
   };
   # Generated service units, /etc files and activation scripts cover the effects
   # of settings beyond the explicit high-risk fields above.

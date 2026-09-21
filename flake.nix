@@ -27,26 +27,34 @@
       pkgs = import nixpkgs { inherit system; };
     in
     {
-      checks.${system}.installer =
-        pkgs.runCommand "installer-checks"
-          {
-            nativeBuildInputs = [
-              pkgs.bash
-              pkgs.shellcheck
-              pkgs.ripgrep
-            ];
-          }
-          ''
-            cp -R ${./.} source
-            chmod -R u+w source
-            cd source
-            shellcheck -x install.sh installer/*.sh tests/*.sh
-            for script in install.sh installer/*.sh tests/*.sh; do bash -n "$script"; done
-            bash tests/installer.sh
-            touch "$out"
-          '';
+      formatter.${system} = pkgs.nixfmt;
+      checks.${system} = {
+        validation =
+          assert import ./tests/validation.nix {
+            configuration = inputs.self.nixosConfigurations.nixos;
+          };
+          pkgs.runCommand "validation-checks" { } ''touch "$out"'';
+        installer =
+          pkgs.runCommand "installer-checks"
+            {
+              nativeBuildInputs = [
+                pkgs.bash
+                pkgs.shellcheck
+                pkgs.ripgrep
+              ];
+            }
+            ''
+              cp -R ${./.} source
+              chmod -R u+w source
+              cd source
+              shellcheck -x install.sh installer/*.sh tests/*.sh
+              for script in install.sh installer/*.sh tests/*.sh; do bash -n "$script"; done
+              bash tests/installer.sh
+              touch "$out"
+            '';
+      };
       nixosConfigurations.nixos = nixpkgs.lib.nixosSystem {
-        system = "x86_64-linux";
+        inherit system;
         specialArgs = {
           inherit inputs;
           settings = import ./hosts/nixos/settings.nix;
@@ -56,9 +64,17 @@
           codex-desktop-linux.nixosModules.default
           home-manager.nixosModules.home-manager
           impermanence.nixosModules.impermanence
-          ({ config, lib, ... }: {
-            assertions = import ./tests/invariants.nix { inherit config lib; };
-          })
+          (
+            {
+              config,
+              lib,
+              settings,
+              ...
+            }:
+            {
+              assertions = import ./tests/invariants.nix { inherit config lib settings; };
+            }
+          )
           ./configuration.nix
         ];
       };

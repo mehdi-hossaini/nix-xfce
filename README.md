@@ -26,14 +26,14 @@ installed-system modules, and `flake.nix` wires external modules and inputs.
 | `modules/system.nix` | Network, locale, Nix/cache/nh, base tools, memory and diagnostic storage |
 | `modules/users.nix` | Accounts, runtime password-file paths, Home Manager integration |
 | `modules/persistence.nix` | Ephemeral root, early mounts, persistent state and mount policy |
-| `modules/gaming.nix` | Steam, NTSync, ProtonUp-Qt, scx, power wrapper and existing THP rule |
+| `modules/gaming.nix` | Steam, NTSync, ProtonUp-Qt, scx, performance/benchmark wrappers, MangoHud and THP rule |
 | `modules/desktop/xfce.nix` | XFCE/LightDM, audio, desktop services, fonts and stable launchers |
 | `modules/desktop/apps.nix` | Zen policies, Codex Desktop and Zed |
 | `home/xfce.nix` | User desktop, panel layout, shortcuts, MIME associations and terminal |
 | `home/style.nix`, `modules/desktop/style.nix` | Palette, final panel sizes, wallpaper helper and its system integration |
 | `installer/install.sh` | Interactive ISO-only destructive workflow |
 | `installer/prepare.sh`, `installer/manifest` | Shared safe staging/preflight and complete source-tree manifest |
-| `tests/` | Shell/staging tests, NixOS invariants, evaluated snapshot expression |
+| `tests/` | Shell/staging tests, settings-aware NixOS invariants, snapshot and validation regressions |
 
 Keep machine changes in `hosts/nixos`. Reuse the modules with another host by
 explicitly composing them and passing its `settings` attribute set. The existing
@@ -51,32 +51,62 @@ The root `install.sh` is only a compatibility wrapper. Never use it for checks.
 From `/etc/nixos`, without activating anything:
 
 ```bash
-nix flake check --no-write-lock-file path:/etc/nixos
+nix flake check --no-update-lock-file path:/etc/nixos
 bash tests/installer.sh --evaluate
 nh os build
 # Equivalent full build without an output symlink:
-nix build --no-link --no-write-lock-file path:/etc/nixos#nixosConfigurations.nixos.config.system.build.toplevel
+nix build --no-link --no-update-lock-file path:/etc/nixos#nixosConfigurations.nixos.config.system.build.toplevel
 ```
 
+Check Nix formatting with the pinned formatter, excluding generated hardware:
+
+```bash
+rg --files -g '*.nix' -g '!hosts/nixos/hardware-configuration.nix' -0 |
+  xargs -0 nix run --no-update-lock-file path:/etc/nixos#formatter.x86_64-linux -- --check
+```
+
+To format an edited file, run `nix fmt -- path/to/file.nix` from the repository
+as its owner.
+
 The flake check runs ShellCheck, Bash syntax checks, staging tests and NixOS
-assertions. The separate `--evaluate` suite invokes only `installer/prepare.sh`:
+assertions. It also evaluates `tests/validation.nix`: an alternate administrator
+must pass assertions without changing the host settings file, an incorrect password
+path must fail, reordered mount options must produce different snapshots, and an
+unrelated Home Manager user must not change which user's home is captured.
+Assertions receive the same `settings` argument as the installed-system modules.
+The separate `--evaluate` suite invokes only `installer/prepare.sh`:
 it tests the real preflight with valid configuration, an unknown option, a failed
 assertion, an inconsistent lock, and a fresh username without the laptop GPUs. It uses temporary files
 and Nix evaluation; it never runs the destructive installer or disk commands.
 It needs Bash, Nix and ripgrep (`nix shell` from the locked nixpkgs can supply rg).
 
-For comparing future refactors, save a copy outside this repository before
-editing, then evaluate `tests/snapshot.nix` against both absolute paths:
+For comparing future refactors, save the actual working-tree source outside this
+repository before editing, including relevant uncommitted changes but excluding
+Git internals, build artifacts and credentials. Record checksums and Git status.
+Use the **same revised snapshot expression** for both sources, especially when
+the snapshot itself changes. Replace `/absolute/path/to/baseline` below with the
+saved source directory containing `flake.nix`:
 
 ```bash
-nix eval --impure --json --expr 'import ./tests/snapshot.nix { source = "/etc/nixos"; }' > /tmp/nixos-settings.json
+nix eval --impure --json --expr 'import /etc/nixos/tests/snapshot.nix { source = "/absolute/path/to/baseline"; }' > /tmp/nixos-before.json
+nix eval --impure --json --expr 'import /etc/nixos/tests/snapshot.nix { source = "/etc/nixos"; }' > /tmp/nixos-after.json
+cmp /tmp/nixos-before.json /tmp/nixos-after.json
 ```
 
 The snapshot captures packages, mounts, passwords' *paths*, users, kernel/driver,
 scx, Home Manager activation, generated units, `/etc` sources and activation
-scripts. Review differences rather than blindly accepting new snapshots. Sorted
-package/mount lists ease comparison; also inspect generated output when order
-could matter. Store paths can change when equivalent module lists are reordered.
+scripts. It selects the administrator from the evaluated configuration's supplied
+settings and includes enabled Home Manager file sources, targets, executable and
+recursive flags, session variables/path, and user service definitions. XDG files,
+including desktop entries, are represented through Home Manager's `home.file`.
+File contents and password hashes are not read by the snapshot expression.
+
+Package, font, kernel-module and mount-option lists retain their evaluated order;
+do not sort them when comparing. Investigate every difference, including changed
+source paths: compare the referenced generated outputs before concluding they
+are equivalent. Source references and successful builds alone do not prove
+runtime behavior. The optional `configuration` argument is used by evaluation
+regressions; ordinary comparisons continue to use `source` as shown above.
 
 `nh os build`, `nh os switch` and `nh os boot` continue to use `path:/etc/nixos`.
 Only activate when ready, with `nh os switch` or the explicit rebuild command
@@ -442,12 +472,18 @@ This configuration was originally written on Windows and is now installed on
 this NixOS laptop. The architecture review on 2026-09-20 checked the pinned module implementations,
 evaluated before/after settings, shell checks, safe installer preparation, active
 persistence mounts, service health, and full system builds.
-No system or user services were failed at the time of the review.
+No system or user services were failed at the time of the review. These are
+historical observations, not guarantees about subsequent boots or activations.
+The commands under **Safe maintenance checks** are the reproducible checks to
+rerun after edits; they do not perform a fresh login, reboot or suspend test.
 
 The installer preflight was tested in an isolated temporary directory with
 valid and deliberately invalid configurations, without running disk commands.
 The current installer has not been rerun end-to-end on a disposable disk or VM;
 suspend/resume and a reboot persistence test still need separate verification.
+An existing limitation remains for hyphenated usernames: the installer accepts
+them, but the Home Manager mount-order assertion does not escape the service
+name as Home Manager does, so preflight fails. The current `mehti` user is unaffected.
 After installation, create one file in your home and one in `/tmp`; reboot and
 confirm only the home file survives. Check saved Wi-Fi connections and
 `/etc/nixos` as well.
@@ -459,6 +495,10 @@ Keep `install.sh` writable only by its owner (mode `0644` when invoking it with
 - [Impermanence module and persistence documentation](https://github.com/nix-community/impermanence)
 
 ## Gaming performance and memory tuning
+
+`game-benchmark` runs a command with
+MangoHud and the performance wrapper, saving logs under
+`${XDG_STATE_HOME:-$HOME/.local/state}/game-benchmarks`.
 
 The system loads `ntsync` for compatible Wine/Proton versions and enables
 Power Profiles Daemon. Run `game-performance COMMAND [ARG...]` to request

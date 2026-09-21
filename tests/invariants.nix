@@ -1,7 +1,11 @@
-{ config, lib }:
+{
+  config,
+  lib,
+  settings,
+}:
 let
   c = config;
-  username = (import ../hosts/nixos/settings.nix).username;
+  inherit (settings) username;
   persistent = map (d: d.directory) c.environment.persistence."/persist".directories;
   ensure = condition: message: {
     assertion = condition;
