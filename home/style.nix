@@ -69,6 +69,23 @@ let
     .xfce4-panel button { background: transparent; border: 0; border-radius: 4px; box-shadow: none; padding: 2px 6px; }
     .xfce4-panel button:hover { background: ${palette.surface}; }
     .xfce4-panel button:checked { background: ${palette.surface}; color: ${palette.accent}; border-bottom: 2px solid ${palette.accent}; }
+    /* Paint the indicator without shifting the centered icon's layout. */
+    .xfce4-panel .tasklist button {
+      padding: 2px;
+      margin: 0 1px;
+      border: 0;
+      border-radius: 4px;
+      background-image: none;
+    }
+    .xfce4-panel .tasklist button image { padding: 0; margin: 0; }
+    .xfce4-panel .tasklist button:checked {
+      background-color: transparent;
+      background-image: linear-gradient(${palette.accent}, ${palette.accent});
+      background-size: 12px 2px;
+      background-position: center bottom;
+      background-repeat: no-repeat;
+    }
+    .xfce4-panel .tasklist button:hover { background-color: ${palette.surface}; }
     #whiskermenu-window { background: ${palette.background}; color: ${palette.foreground}; }
   '';
 in

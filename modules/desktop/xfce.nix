@@ -9,7 +9,7 @@ let
     type = "uint";
     inherit value;
   };
-  # Use our own desktop IDs so panel launchers do not depend on upstream names.
+  # Stable desktop IDs for preferred applications and optional launchers.
   zenLauncher = pkgs.makeDesktopItem {
     name = "workstation-zen";
     desktopName = "Zen Browser";
@@ -157,12 +157,6 @@ in
       uint
       workspaceKeys
       applyDarkTheme
-      ;
-    inherit
-      zenLauncher
-      codexLauncher
-      terminalLauncher
-      filesLauncher
       ;
   };
 }

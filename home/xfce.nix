@@ -4,10 +4,6 @@
   uint,
   workspaceKeys,
   applyDarkTheme,
-  zenLauncher,
-  codexLauncher,
-  terminalLauncher,
-  filesLauncher,
   ...
 }:
 {
@@ -159,10 +155,6 @@
         1
         2
         3
-        4
-        5
-        6
-        7
         8
         9
         10
@@ -175,18 +167,13 @@
       "plugins/plugin-2/miniature-view" = false;
       "plugins/plugin-3" = "separator";
       "plugins/plugin-3/style" = uint 0;
-      "plugins/plugin-4" = "launcher";
-      "plugins/plugin-4/items" = [ "${zenLauncher}/share/applications/workstation-zen.desktop" ];
-      "plugins/plugin-5" = "launcher";
-      "plugins/plugin-5/items" = [ "${codexLauncher}/share/applications/workstation-codex.desktop" ];
-      "plugins/plugin-6" = "launcher";
-      "plugins/plugin-6/items" = [
-        "${terminalLauncher}/share/applications/workstation-terminal.desktop"
-      ];
-      "plugins/plugin-7" = "launcher";
-      "plugins/plugin-7/items" = [ "${filesLauncher}/share/applications/workstation-files.desktop" ];
       "plugins/plugin-8" = "tasklist";
-      "plugins/plugin-8/grouping" = uint 1;
+      # Compact running-app icons; window titles remain available on hover.
+      "plugins/plugin-8/grouping" = true;
+      "plugins/plugin-8/show-labels" = false;
+      "plugins/plugin-8/flat-buttons" = true;
+      "plugins/plugin-8/show-handle" = false;
+      "plugins/plugin-8/show-tooltips" = true;
       "plugins/plugin-9" = "separator";
       "plugins/plugin-9/expand" = true;
       "plugins/plugin-9/style" = uint 0;
