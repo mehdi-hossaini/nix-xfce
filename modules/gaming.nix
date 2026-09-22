@@ -1,6 +1,26 @@
 { pkgs, ... }:
 let
   batteryPython = pkgs.python3.withPackages (ps: [ ps.pygobject3 ]);
+  # scx v1.1.3 contains the rewritten scx_cake 1.2.x. Keep the existing
+  # nixpkgs package available as a one-line rollback while this is evaluated.
+  useScxCakeNext = true;
+  scxNextSrc = pkgs.fetchFromGitHub {
+    owner = "sched-ext";
+    repo = "scx";
+    tag = "v1.1.3";
+    hash = "sha256-LK0go5blWgCtDpS5xm9BQc7C2NvbfrW+Jp66ImIThxA=";
+  };
+  scxNext = pkgs.scx.rustscheds.overrideAttrs (old: {
+    pname = "scx-rustscheds-next";
+    version = "1.1.3";
+    src = scxNextSrc;
+    cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
+      src = scxNextSrc;
+      hash = "sha256-vEsbpor52DEUpYO5OubFPMzRltO5kUXjqAoO/9hsKXc=";
+    };
+    # The upstream release adds scheduler binaries not listed by nixpkgs 26.05.
+    doInstallCheck = false;
+  });
   gamePerformance = pkgs.writeShellApplication {
     name = "game-performance";
     runtimeInputs = [
@@ -27,12 +47,17 @@ in
   # CPU scheduling through sched_ext; the kernel's built-in scheduler is fallback.
   services.scx = {
     enable = true;
-    package = pkgs.scx.rustscheds;
+    package = if useScxCakeNext then scxNext else pkgs.scx.rustscheds;
     scheduler = "scx_cake";
-    extraArgs = [
-      "--profile"
-      "esports"
-    ];
+    # scx_cake 1.2.x is fully adaptive and intentionally has no profiles.
+    extraArgs =
+      if useScxCakeNext then
+        [ ]
+      else
+        [
+          "--profile"
+          "esports"
+        ];
   };
   programs.steam.enable = true;
   boot.kernelModules = [ "ntsync" ];
