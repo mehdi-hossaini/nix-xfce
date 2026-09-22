@@ -18,25 +18,13 @@ let
   };
   withOptions =
     options:
-    configuration
-    // {
-      config = configuration.config // {
-        fileSystems = configuration.config.fileSystems // {
-          "/home" = configuration.config.fileSystems."/home" // {
-            inherit options;
-          };
-        };
-      };
+    lib.recursiveUpdate configuration {
+      config.fileSystems."/home".options = options;
     };
   # An unrelated user that sorts first must not change the selected home.
-  withEarlierUser = alternate // {
-    config = alternate.config // {
-      home-manager = alternate.config.home-manager // {
-        users = alternate.config.home-manager.users // {
-          "aaa-unrelated" = throw "Snapshot selected an unrelated Home Manager user";
-        };
-      };
-    };
+  withEarlierUser = lib.recursiveUpdate alternate {
+    config.home-manager.users."aaa-unrelated" =
+      throw "Snapshot selected an unrelated Home Manager user";
   };
 in
 assert lib.assertMsg (lib.all (a: a.assertion)

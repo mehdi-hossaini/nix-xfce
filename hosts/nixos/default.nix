@@ -10,7 +10,19 @@
   boot.kernelPackages = pkgs.cachyosKernels.linuxPackages-cachyos-latest-zen4;
   boot.loader.systemd-boot.enable = true;
   boot.loader.systemd-boot.configurationLimit = 10;
+  # Boot immediately; hold Space during startup to select an older generation.
+  boot.loader.timeout = 0;
   boot.loader.efi.canTouchEfiVariables = true;
+
+  # Rotate the internal panel before LightDM and the desktop start.
+  services.xserver.xrandrHeads = [
+    {
+      output = "eDP-1";
+      monitorConfig = ''
+        Option "Rotate" "inverted"
+      '';
+    }
+  ];
 
   # The live installer fills these IDs for the Radeon 760M + RTX 4050 laptop.
   # Leave empty for a VM without the laptop's GPUs passed through.

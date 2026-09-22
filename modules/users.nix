@@ -1,7 +1,9 @@
-{ settings, ... }:
+{ pkgs, settings, ... }:
 {
+  programs.zsh.enable = true;
   users.users.${settings.username} = {
     isNormalUser = true;
+    shell = pkgs.zsh;
     extraGroups = [
       "wheel"
       "networkmanager"

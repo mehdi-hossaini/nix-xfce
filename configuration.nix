@@ -7,7 +7,6 @@
     ./modules/persistence.nix
     ./modules/gaming.nix
     ./modules/desktop/xfce.nix
-    ./modules/desktop/style.nix
     ./modules/desktop/apps.nix
   ];
 }

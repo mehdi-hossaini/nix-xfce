@@ -30,7 +30,7 @@ installed-system modules, and `flake.nix` wires external modules and inputs.
 | `modules/desktop/xfce.nix` | XFCE/LightDM, audio, desktop services, fonts and stable launchers |
 | `modules/desktop/apps.nix` | Zen policies, Codex Desktop and Zed |
 | `home/xfce.nix` | User desktop, panel layout, shortcuts, MIME associations and terminal |
-| `home/style.nix`, `modules/desktop/style.nix` | Palette, final panel sizes, wallpaper helper and its system integration |
+| `home/style.nix` | Home Manager styling, palette, panel sizes and wallpaper helper |
 | `installer/install.sh` | Interactive ISO-only destructive workflow |
 | `installer/prepare.sh`, `installer/manifest` | Shared safe staging/preflight and complete source-tree manifest |
 | `tests/` | Shell/staging tests, settings-aware NixOS invariants, snapshot and validation regressions |
@@ -38,8 +38,8 @@ installed-system modules, and `flake.nix` wires external modules and inputs.
 Keep machine changes in `hosts/nixos`. Reuse the modules with another host by
 explicitly composing them and passing its `settings` attribute set. The existing
 host selects the Zen 4 kernel; reusing desktop modules alone does not select it.
-`home/*.nix` are small parameterized configuration fragments; they are wired by
-the desktop modules and are not a standalone Home Manager flake.
+`home/shell.nix` and `home/style.nix` are Home Manager modules; `home/xfce.nix`
+is a parameterized configuration fragment. The desktop module wires them together.
 
 New modules inside `hosts`, `modules`, or `home` are automatically staged by the
 installer. If you introduce a new top-level source directory, add it to
@@ -193,15 +193,19 @@ The `nixos` flake output name stays the same regardless of hostname.
 
 `home/xfce.nix` uses Home Manager to apply the desktop settings for the username
 selected by the installer. It creates one bottom panel with Whisker menu,
-five numbered workspaces, Zen/Codex/Alacritty/Thunar launchers, open windows,
+five numbered workspaces, open windows,
 the system tray, volume control, and a 24-hour clock. Wi-Fi, Bluetooth and
 battery controls stay available. LightDM remains the login screen.
 
+The internal `eDP-1` panel starts rotated 180° for upside-down laptop use,
+including LightDM. This is configured in `hosts/nixos/default.nix` through
+`services.xserver.xrandrHeads`; no XFCE rotation autostart is needed.
+
 Zen is configured as both the XDG default browser for web links and HTML files
 and XFCE’s preferred web browser. Dark GTK defaults are written by Home Manager;
-the Adwaita-dark XFCE theme is also applied at every login.
+the standard Adwaita Dark XFCE theme is also applied at every login.
 
-The desktop uses Adwaita Dark, elementary XFCE icons, readable interface fonts,
+The desktop uses the stable Adwaita Dark widget theme, elementary XFCE icons, readable interface fonts,
 and Iosevka in the terminal and clock. Desktop icons are hidden; maximized
 windows hide their title bars. XFCE's screensaver handles locking.
 
@@ -212,9 +216,9 @@ live in `home/xfce.nix`. After activation, `xset q` should report DPMS enabled,
 `Standby: 0`, `Suspend: 0`, and `Off: 300` in a normal uninhibited session.
 Applications that inhibit display power saving can delay this timeout.
 
-`home/style.nix` adds a charcoal (`#202624`) and sage (`#a7bf9e`) palette, a slim
+`home/style.nix` adds Gruvbox dark (`#282828`) and yellow (`#d79921`) colors to the standard theme, a slim
 opaque panel, matching Rofi and Alacritty colors, and a generated 4K hills
-wallpaper. GTK selection accents use sage. Zen Browser receives dark theme
+wallpaper. GTK selection accents use Gruvbox yellow. Zen Browser receives dark theme
 and selection-color defaults; existing profile overrides and workspace themes
 can take precedence. Notification sounds and transition effects are disabled,
 while alerts stay enabled with a five-second default timeout.
@@ -435,6 +439,11 @@ sudo nixos-rebuild switch --flake path:/etc/nixos#nixos
 
 Keep `system.stateVersion` at the original installation version when upgrading.
 Earlier generations are available in the boot menu.
+
+The boot menu has no automatic delay; hold Space during startup to open it.
+Bat uses its built-in themes and syntaxes, avoiding a cache rebuild during
+Home Manager activation on every boot. To compare boot times after changes,
+run `systemd-analyze time` and `systemd-analyze critical-chain` after reboot.
 
 ## Resume an interrupted installation
 

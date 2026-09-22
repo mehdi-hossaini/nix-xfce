@@ -11,6 +11,13 @@
 
   hardware.enableRedistributableFirmware = true;
   nixpkgs.config.allowUnfree = true;
+  services.udev.extraRules = ''
+    # The SK hynix system NVMe enters a 10 ms-exit power state after 100 ms.
+    # Cap it at PS3 (2 ms exit, 15 mW) without affecting the secondary NVMe.
+    ACTION=="add", SUBSYSTEM=="nvme", ATTR{model}=="HFS001TEJ9X110N*", ATTR{power/pm_qos_latency_tolerance_us}="2000"
+    # Benchmarked best for random-read throughput and latency on this drive.
+    ACTION=="add|change", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", KERNEL=="nvme*n*", ATTRS{model}=="HFS001TEJ9X110N*", ATTR{queue/scheduler}="none", ATTR{queue/rq_affinity}="0"
+  '';
   programs.nh = {
     enable = true;
     flake = "path:/etc/nixos";
@@ -27,6 +34,7 @@
     htop
     unzip
     openssl
+    devenv
   ];
   zramSwap = {
     enable = true;

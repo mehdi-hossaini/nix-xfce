@@ -9,7 +9,7 @@ let
     type = "uint";
     inherit value;
   };
-  # Stable desktop IDs for preferred applications and optional launchers.
+  # Stable desktop ID for the preferred browser.
   zenLauncher = pkgs.makeDesktopItem {
     name = "workstation-zen";
     desktopName = "Zen Browser";
@@ -26,36 +26,6 @@ let
     ];
     noDisplay = true;
   };
-  codexLauncher = pkgs.makeDesktopItem {
-    name = "workstation-codex";
-    desktopName = "Codex Desktop";
-    exec = "codex-desktop %U";
-    icon = "codex-desktop";
-    categories = [ "Development" ];
-    noDisplay = true;
-  };
-  terminalLauncher = pkgs.makeDesktopItem {
-    name = "workstation-terminal";
-    desktopName = "Terminal";
-    exec = "alacritty";
-    icon = "Alacritty";
-    categories = [
-      "System"
-      "TerminalEmulator"
-    ];
-    noDisplay = true;
-  };
-  filesLauncher = pkgs.makeDesktopItem {
-    name = "workstation-files";
-    desktopName = "Files";
-    exec = "thunar";
-    icon = "system-file-manager";
-    categories = [
-      "System"
-      "FileManager"
-    ];
-    noDisplay = true;
-  };
   applyDarkTheme = pkgs.writeShellApplication {
     name = "apply-dark-theme";
     runtimeInputs = [ pkgs.xfconf ];
@@ -63,25 +33,11 @@ let
       xfconf-query -c xsettings -p /Net/ThemeName -n -t string -s Adwaita-dark
     '';
   };
-  workspaceKeys = lib.listToAttrs (
-    lib.concatMap
-      (n: [
-        {
-          name = "xfwm4/custom/<Super>${toString n}";
-          value = "workspace_${toString n}_key";
-        }
-        {
-          name = "xfwm4/custom/<Super><Shift>${toString n}";
-          value = "move_window_workspace_${toString n}_key";
-        }
-      ])
-      [
-        1
-        2
-        3
-        4
-        5
-      ]
+  workspaceKeys = lib.mergeAttrsList (
+    map (n: {
+      "xfwm4/custom/<Super>${toString n}" = "workspace_${toString n}_key";
+      "xfwm4/custom/<Super><Shift>${toString n}" = "move_window_workspace_${toString n}_key";
+    }) (lib.range 1 5)
   );
 in
 {
@@ -140,9 +96,6 @@ in
     gnome-themes-extra
     elementary-xfce-icon-theme
     zenLauncher
-    codexLauncher
-    terminalLauncher
-    filesLauncher
   ];
   fonts.packages = with pkgs; [
     nerd-fonts.iosevka
@@ -150,13 +103,19 @@ in
     noto-fonts-color-emoji
   ];
 
-  home-manager.users.${settings.username} = import ../../home/xfce.nix {
-    inherit
-      pkgs
-      settings
-      uint
-      workspaceKeys
-      applyDarkTheme
-      ;
+  home-manager.users.${settings.username} = {
+    imports = [
+      ../../home/shell.nix
+      ../../home/style.nix
+    ];
+    config = import ../../home/xfce.nix {
+      inherit
+        pkgs
+        settings
+        uint
+        workspaceKeys
+        applyDarkTheme
+        ;
+    };
   };
 }

@@ -18,6 +18,10 @@
       name = "Adwaita-dark";
       package = pkgs.gnome-themes-extra;
     };
+    iconTheme = {
+      name = "elementary-xfce-dark";
+      package = pkgs.elementary-xfce-icon-theme;
+    };
     gtk3.extraConfig.gtk-application-prefer-dark-theme = true;
     gtk4.extraConfig.gtk-application-prefer-dark-theme = true;
   };
@@ -65,6 +69,18 @@
         x = 8;
         y = 8;
       };
+      window.dynamic_padding = true;
+      scrolling.history = 100000;
+      cursor = {
+        style = {
+          shape = "Beam";
+          blinking = "On";
+        };
+        blink_interval = 500;
+        unfocused_hollow = true;
+      };
+      mouse.hide_when_typing = true;
+      selection.save_to_clipboard = true;
     };
   };
 
