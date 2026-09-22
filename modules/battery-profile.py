@@ -2,24 +2,38 @@
 
 import signal
 
-from gi.repository import Gio, GLib
-
 
 class BatteryHold:
     def __init__(self, acquire, release):
         self.acquire = acquire
         self.release = release
         self.cookie = None
+        self.on_battery = None
+        self.manual_selection = False
 
     def update(self, on_battery):
-        if on_battery and self.cookie is None:
+        if on_battery != self.on_battery:
+            self.on_battery = on_battery
+            self.manual_selection = False
+        if on_battery and self.cookie is None and not self.manual_selection:
             self.cookie = self.acquire()
         elif not on_battery and self.cookie is not None:
             cookie, self.cookie = self.cookie, None
             self.release(cookie)
 
+    def profile_released(self, cookie):
+        if cookie == self.cookie:
+            self.cookie = None
+            self.manual_selection = True
+
+    def daemon_restarted(self):
+        self.cookie = None
+        self.manual_selection = False
+
 
 def main():
+    from gi.repository import Gio, GLib
+
     flags = Gio.DBusProxyFlags.NONE
     power = Gio.DBusProxy.new_for_bus_sync(
         Gio.BusType.SYSTEM, flags, None, "org.freedesktop.UPower",
@@ -58,14 +72,14 @@ def main():
                 loop.quit()
 
     def profiles_restarted(*_):
-        hold.cookie = None
+        hold.daemon_restarted()
         reconcile()
 
     def profile_released(_proxy, _sender, name, parameters):
         # Respect an explicit user profile selection until the next power
         # source change. PPD releases all holds when the user selects a profile.
-        if name == "ProfileReleased" and parameters.unpack()[0] == hold.cookie:
-            hold.cookie = None
+        if name == "ProfileReleased":
+            hold.profile_released(parameters.unpack()[0])
 
     power.connect("g-properties-changed", reconcile)
     power.connect("notify::g-name-owner", reconcile)

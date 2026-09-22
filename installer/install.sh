@@ -112,7 +112,7 @@ if [[ ${1:-} != --mounted ]]; then
   disk=$(readlink -f -- "$disk")
   [[ $(lsblk -dnro TYPE "$disk") == disk ]] || die 'Select a whole disk, not a partition or mapped device.'
   [[ $(lsblk -dnro RO "$disk") == 0 ]] || die 'Disk is read-only.'
-  (( $(lsblk -bdnro SIZE "$disk") >= 21474836480 )) || die 'Select a disk of at least 20 GiB.'
+  (( $(lsblk -bdnro SIZE "$disk") >= 68719476736 )) || die 'Select a disk of at least 64 GiB.'
   # Reject mounted descendants (including the live USB), swap, and active mappings.
   [[ -z $(lsblk -nr -o MOUNTPOINTS "$disk" | tr -d '[:space:]') ]] || die 'Disk has mounted filesystems or active swap; refusing to erase it.'
   while read -r node type; do
@@ -170,7 +170,13 @@ if [[ -f /mnt/persist/etc/nixos/configuration.nix ]]; then
   cp -a /mnt/persist/etc/nixos "$backup"
   printf 'Existing configuration backed up to %s\n' "$backup"
 fi
-mountpoint -q /mnt/etc/nixos || mount --bind /mnt/persist/etc/nixos /mnt/etc/nixos
+if mountpoint -q /mnt/etc/nixos; then
+  # A resumed install may already have our bind mount. Never stage into a
+  # different mount and then install the stale configuration under /persist.
+  [[ /mnt/etc/nixos -ef /mnt/persist/etc/nixos ]] || die '/mnt/etc/nixos is mounted from a different directory; unmount it before resuming.'
+else
+  mount --bind /mnt/persist/etc/nixos /mnt/etc/nixos
+fi
 stage_configuration "$staging" /mnt/etc/nixos
 # Impermanence owns the config bind mount; omit it from the hardware scan.
 umount /mnt/etc/nixos

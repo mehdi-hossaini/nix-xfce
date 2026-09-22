@@ -39,6 +39,7 @@
             {
               nativeBuildInputs = [
                 pkgs.bash
+                pkgs.python3
                 pkgs.shellcheck
                 pkgs.ripgrep
               ];
@@ -50,6 +51,7 @@
               shellcheck -x install.sh installer/*.sh tests/*.sh
               for script in install.sh installer/*.sh tests/*.sh; do bash -n "$script"; done
               bash tests/installer.sh
+              python3 tests/battery_profile.py
               touch "$out"
             '';
       };

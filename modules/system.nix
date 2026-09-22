@@ -43,6 +43,14 @@
     memoryPercent = 50;
     priority = 100;
   };
+  # Fall back to NVMe when compressed RAM swap fills up. /persist survives reboot.
+  swapDevices = [
+    {
+      device = "/persist/swapfile";
+      size = 16384; # MiB; NixOS creates a Btrfs-compatible swap file.
+      priority = 0;
+    }
+  ];
   # ZRAM already compresses swap; avoid adding a second compression cache.
   boot.kernelParams = [ "zswap.enabled=0" ];
   boot.kernel.sysctl = {

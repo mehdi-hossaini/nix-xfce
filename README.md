@@ -7,8 +7,8 @@ CachyOS Zen 4 kernel. Requires an AMD Zen 4-compatible x86_64 CPU and UEFI;
 use the x86_64 ISO. This is not a generic Intel, older AMD, or ARM build.
 The laptop target is a Ryzen 5 8645HS with Radeon 760M and RTX 4050 Laptop GPU.
 Disable Secure Boot unless you have separately configured signed boot support.
-Internet access is required. Use a disk with at least 20 GiB; 40 GiB or more is
-recommended. The disk is **unencrypted**.
+Internet access is required. Use a disk with at least 64 GiB to leave room for
+the system, updates, and a 16 GiB persistent swap file. The disk is **unencrypted**.
 
 ## Layout and ownership
 
@@ -305,6 +305,8 @@ Capacity is allocated on demand, not reserved at startup. Swappiness is 150
 and swap read-ahead (`vm.page-cluster`) is zero. Zswap is disabled to avoid
 putting another compression cache in front of ZRAM. These are starting settings
 for compressed swap, not a guaranteed speedup for every workload.
+An additional 16 GiB Btrfs swap file at `/persist/swapfile` has priority 0, so
+it is used after ZRAM fills. NixOS creates it on the persistent NVMe mount.
 
 Persistent journals have a `250M` budget; runtime journals have `50M`.
 Compressed crash dumps have a `512M` total storage budget, `256M` per-dump
@@ -354,10 +356,9 @@ In a VM without these GPUs, the installer leaves NVIDIA disabled. Do not reuse
 that VM's empty GPU settings for the real laptop. On an existing installation,
 preserve the detected PCI IDs in `hosts/nixos/settings.nix` when updating other files.
 
-`services.scx` starts **scx_cake** automatically at boot, using the Rust SCX
-scheduler package from the locked NixOS release. The current release package
-is the SCX 1.1.2 suite and includes `scx_cake`; the scheduler's own version
-can differ. The service selects the `esports` profile with `--profile esports`; no verbose
+`services.scx` starts **scx_cake** automatically at boot. The configuration
+overrides the locked NixOS Rust scheduler package with SCX 1.1.3, whose
+rewritten Cake scheduler runs without a profile or extra arguments. No verbose
 TUI or individual tuning overrides are enabled.
 This changes CPU scheduling, not the disk I/O scheduler or network queueing.
 
@@ -391,8 +392,8 @@ compatibility and gaming performance still need testing on the actual machine.
 
 [Upstream Cake documentation](https://github.com/sched-ext/scx/tree/main/scheds/rust/scx_cake)
 now describes a rewritten design, so the older four-tier description should
-not be assumed to describe every release. This configuration uses the packaged
-release rather than tracking upstream `main` independently.
+not be assumed to describe every release. This configuration pins SCX 1.1.3
+rather than tracking upstream `main` independently.
 
 Codex Desktop is installed through the NixOS module from
 [ilysenko/codex-desktop-linux](https://github.com/ilysenko/codex-desktop-linux).
